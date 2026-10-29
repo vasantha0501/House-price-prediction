@@ -1,0 +1,331 @@
+library(shiny)
+library(readxl)
+library(dplyr)
+library(tidyr)
+
+#############################
+# Read Dataset
+#############################
+
+data <- read_excel(
+  "D://santhi//owndata.xlsx",
+  sheet = "Sheet2"
+)
+
+colnames(data)[1:3] <- c("city","locality","area")
+
+#############################
+# Convert Wide to Long
+#############################
+
+long_data <- pivot_longer(
+  data,
+  cols = `2021`:`2026`,
+  names_to = "Year",
+  values_to = "Price"
+)
+
+long_data$Year <- as.numeric(long_data$Year)
+
+long_data$city <- factor(long_data$city)
+long_data$locality <- factor(long_data$locality)
+long_data$area <- factor(long_data$area)
+
+#############################
+# Regression Model
+#############################
+
+model <- lm(
+  Price ~ Year + city + locality + area,
+  data = long_data
+)
+
+#############################
+# UI
+#############################
+
+ui <- fluidPage(
+  
+  tags$head(
+    
+    tags$link(
+      rel="stylesheet",
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    ),
+    
+    tags$link(
+      rel="stylesheet",
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap"
+    ),
+    
+    tags$style(HTML("
+
+body{
+
+background:
+linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),
+url('https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1600&q=80');
+
+background-size:cover;
+background-position:center;
+font-family:Poppins;
+}
+
+.container{
+
+width:450px;
+margin:auto;
+margin-top:40px;
+
+padding:35px;
+
+border-radius:20px;
+
+background:rgba(255,255,255,.18);
+
+backdrop-filter:blur(15px);
+
+box-shadow:0 15px 35px rgba(0,0,0,.4);
+
+color:white;
+
+}
+
+.logo{
+
+text-align:center;
+
+}
+
+.logo i{
+
+font-size:65px;
+color:#FFD700;
+
+}
+
+.title{
+
+text-align:center;
+font-size:30px;
+font-weight:bold;
+margin-bottom:20px;
+
+}
+
+.btn-success{
+
+background:#00C853 !important;
+border:none !important;
+
+}
+
+.btn-success:hover{
+
+background:#00A844 !important;
+
+}
+
+.prediction{
+
+margin-top:20px;
+padding:15px;
+
+background:white;
+
+border-radius:10px;
+
+font-size:22px;
+
+font-weight:bold;
+
+color:#006400;
+
+text-align:center;
+
+}
+
+.dashboard{
+
+margin-top:30px;
+
+background:white;
+
+padding:20px;
+
+border-radius:15px;
+
+}
+
+label{
+
+font-weight:bold;
+color:white;
+
+}
+
+"))
+    
+  ),
+  
+  div(class="container",
+      
+      div(class="logo",
+          tags$i(class="fas fa-house")
+      ),
+      
+      div(class="title",
+          "House Price Prediction Using R"
+      ),
+      
+      selectInput(
+        "city",
+        "Select City",
+        choices=sort(unique(data$city))
+      ),
+      
+      uiOutput("localityUI"),
+      
+      uiOutput("areaUI"),
+      
+      actionButton(
+        "predict",
+        "Predict Price",
+        class="btn-success"
+      ),
+      
+      br(),
+      br(),
+      
+      div(
+        class="prediction",
+        textOutput("prediction")
+      )
+      
+  ),
+  
+  br(),
+  
+  div(class="dashboard",
+      
+      h2("Land Price Dashboard"),
+      
+      tags$iframe(
+        
+        src="https://public.tableau.com/views/landprice_17853920141660/Dashboard1?:language=en-US&publish=yes&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link",
+        
+        width="100%",
+        
+        height="700px",
+        
+        style="border:none;"
+        
+      )
+      
+  )
+  
+)
+
+#############################
+# Server
+#############################
+
+server <- function(input, output, session){
+  
+  output$localityUI <- renderUI({
+    
+    localities <-
+      
+      data %>%
+      
+      filter(city==input$city) %>%
+      
+      pull(locality) %>%
+      
+      unique()
+    
+    selectInput(
+      
+      "locality",
+      
+      "Select Locality",
+      
+      choices=sort(localities)
+      
+    )
+    
+  })
+  
+  output$areaUI <- renderUI({
+    
+    areas <-
+      
+      data %>%
+      
+      filter(
+        
+        city==input$city,
+        
+        locality==input$locality
+        
+      ) %>%
+      
+      pull(area) %>%
+      
+      unique()
+    
+    selectInput(
+      
+      "area",
+      
+      "Select Area",
+      
+      choices=sort(areas)
+      
+    )
+    
+  })
+  
+  observeEvent(input$predict,{
+    
+    newdata <- data.frame(
+      
+      Year=2027,
+      
+      city=factor(
+        input$city,
+        levels=levels(long_data$city)
+      ),
+      
+      locality=factor(
+        input$locality,
+        levels=levels(long_data$locality)
+      ),
+      
+      area=factor(
+        input$area,
+        levels=levels(long_data$area)
+      )
+      
+    )
+    
+    pred <- predict(model,newdata)
+    
+    output$prediction <- renderText({
+      
+      paste0(
+        "₹ ",
+        format(round(pred,2), big.mark=",")
+      )
+      
+    })
+    
+  })
+  
+}
+
+#############################
+# Run App
+#############################
+
+shinyApp(ui, server)
